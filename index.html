@@ -1,0 +1,682 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Ular Tangga</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;600;700&display=swap">
+<style>
+/* Layout: papan 10x10 dominan di kiri, panel kontrol (giliran, dadu, pemain, riwayat, pengaturan) di kanan; menumpuk di layar sempit. */
+:root {
+  --bg: #EAF1EE;
+  --panel: #FFFFFF;
+  --fg: #14302A;
+  --muted: #55706A;
+  --line: #C9D9D4;
+  --accent: #0E6B5A;
+  --on-accent: #FFFFFF;
+  --focus: #E39A00;
+  --board-edge: #14302A;
+  --sq-a: #D5E8E0;
+  --sq-b: #F4E6AE;
+  --finish: #F2C94C;
+  --ladder: #8A5320;
+  --sn1: #7B3FC2;
+  --sn2: #C4326B;
+  --sn3: #1C7C8E;
+  --sn-dash: rgba(255, 255, 255, 0.55);
+  --pawn-ring: #FFFFFF;
+  --font-display: 'Bricolage Grotesque', 'Trebuchet MS', system-ui, sans-serif;
+  --font-body: 'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D1917;
+    --panel: #152624;
+    --fg: #E4F0EC;
+    --muted: #8FAAA4;
+    --line: #28403C;
+    --accent: #3FC1A5;
+    --on-accent: #08201B;
+    --focus: #F2B134;
+    --board-edge: #3B5A55;
+    --sq-a: #1B3733;
+    --sq-b: #3E3A1F;
+    --finish: #7A6420;
+    --ladder: #D49A5A;
+    --sn1: #A77BE6;
+    --sn2: #E8639A;
+    --sn3: #4DB8CB;
+    --sn-dash: rgba(255, 255, 255, 0.4);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D1917;
+  --panel: #152624;
+  --fg: #E4F0EC;
+  --muted: #8FAAA4;
+  --line: #28403C;
+  --accent: #3FC1A5;
+  --on-accent: #08201B;
+  --focus: #F2B134;
+  --board-edge: #3B5A55;
+  --sq-a: #1B3733;
+  --sq-b: #3E3A1F;
+  --finish: #7A6420;
+  --ladder: #D49A5A;
+  --sn1: #A77BE6;
+  --sn2: #E8639A;
+  --sn3: #4DB8CB;
+  --sn-dash: rgba(255, 255, 255, 0.4);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.45;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 32px;
+}
+.wrap { max-width: 1060px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+header h1 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(30px, 6vw, 46px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+header p { margin: 0; color: var(--muted); }
+
+.app { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 28px; align-items: start; }
+@media (max-width: 860px) { .app { grid-template-columns: minmax(0, 1fr); } }
+
+.board-wrap { width: min(100%, 660px); min-width: 0; }
+.board {
+  position: relative;
+  aspect-ratio: 1;
+  max-width: 100%;
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+  border: 5px solid var(--board-edge);
+  border-radius: 10px;
+  background: var(--board-edge);
+  gap: 1px;
+  container-type: inline-size;
+}
+.cell {
+  position: relative;
+  background: var(--sq-a);
+  min-width: 0;
+  min-height: 0;
+}
+.cell.alt { background: var(--sq-b); }
+.cell.finish { background: var(--finish); }
+.cell span {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  font-size: 11px;
+  font-size: clamp(8px, 1.9cqw, 13px);
+  font-weight: 700;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.cell.finish span { color: var(--fg); }
+.cell.start::after, .cell.finish::after {
+  position: absolute;
+  bottom: 3px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 7px;
+  font-size: clamp(6px, 1.5cqw, 10px);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--fg);
+  line-height: 1;
+}
+.cell.start::after { content: "MULAI"; }
+.cell.finish::after { content: "FINISH"; }
+
+.overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.pawns { position: absolute; inset: 0; pointer-events: none; }
+.pawn {
+  position: absolute;
+  width: 4.6%;
+  height: 4.6%;
+  border-radius: 50%;
+  background: var(--pc);
+  color: var(--pt);
+  border: 2px solid var(--pawn-ring);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 10px;
+  font-size: clamp(7px, 2.4cqw, 15px);
+  line-height: 1;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  transition: left 0.22s ease, top 0.22s ease;
+  z-index: 3;
+}
+.pawn.jump { transition: left 0.85s cubic-bezier(0.5, 0, 0.2, 1), top 0.85s cubic-bezier(0.5, 0, 0.2, 1); z-index: 4; }
+.pawn.active { box-shadow: 0 0 0 3px var(--focus), 0 1px 4px rgba(0, 0, 0, 0.45); z-index: 5; }
+
+.tray {
+  height: 46px;
+  display: flex;
+  align-items: center;
+  padding-left: 23%;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.rail { display: flex; flex-direction: column; gap: 22px; min-width: 0; }
+.turn-card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.turn-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chip {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--pc);
+  color: var(--pt);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  border: 2px solid var(--pawn-ring);
+  box-shadow: 0 0 0 1px var(--line);
+}
+.turn-title { font-family: var(--font-display); font-weight: 800; font-size: 20px; line-height: 1.15; min-width: 0; }
+.dice-row { display: flex; align-items: center; gap: 16px; }
+.die {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 14px;
+  background: #FFFFFF;
+  border: 2px solid var(--board-edge);
+  display: grid;
+  grid-template: repeat(3, 1fr) / repeat(3, 1fr);
+  padding: 9px;
+  box-shadow: 0 3px 0 var(--board-edge);
+}
+.die i { width: 11px; height: 11px; border-radius: 50%; background: #14302A; place-self: center; visibility: hidden; }
+.die.rolling { animation: shake 0.16s linear infinite; }
+@keyframes shake {
+  0% { transform: rotate(-7deg) translateY(0); }
+  50% { transform: rotate(6deg) translateY(-3px); }
+  100% { transform: rotate(-7deg) translateY(0); }
+}
+.btn {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 10px;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 12px 18px;
+  min-height: 46px;
+}
+.btn.ghost { background: transparent; color: var(--fg); border-color: var(--line); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:focus-visible, .seg button:focus-visible, .toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.dice-row .btn { flex: 1; }
+.msg { margin: 0; color: var(--muted); min-height: 2.9em; }
+.win .turn-title { color: var(--accent); }
+
+h2.label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+ul.plain { list-style: none; margin: 0; padding: 0; }
+.players li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.players li.on { border-color: var(--accent); background: var(--panel); }
+.players .nm { flex: 1; min-width: 0; font-weight: 600; }
+.players .ps { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.log li { padding: 5px 0; border-top: 1px solid var(--line); font-size: 14px; }
+.log li:first-child { border-top: 0; font-weight: 600; }
+.log li:not(:first-child) { color: var(--muted); }
+
+.seg { display: flex; gap: 6px; }
+.seg button {
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+  flex: 1;
+  min-height: 42px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+}
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.toggle {
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 112px;
+  min-height: 38px;
+  border-radius: 10px;
+  border: 2px solid var(--line);
+  background: transparent;
+  color: var(--fg);
+}
+.settings { display: flex; flex-direction: column; gap: 12px; }
+.rules { margin: 0; font-size: 13px; color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  .die.rolling { animation: none; }
+  .pawn, .pawn.jump { transition: none; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Ular Tangga</h1>
+    <p>Sampai di kotak 100 lebih dulu. Hati-hati dengan kepala ular.</p>
+  </header>
+
+  <div class="app">
+    <div class="board-wrap">
+      <div class="board" id="board" aria-label="Papan ular tangga 10 kali 10"></div>
+      <div class="tray">Garis mulai. Lempar dadu untuk masuk ke papan.</div>
+    </div>
+
+    <aside class="rail">
+      <section class="turn-card" id="turnCard">
+        <div class="turn-head">
+          <div class="chip" id="turnChip">1</div>
+          <div class="turn-title" id="turnTitle">Giliran Pemain 1</div>
+        </div>
+        <div class="dice-row">
+          <div class="die" id="die" role="img" aria-label="Dadu"></div>
+          <button class="btn" id="rollBtn" type="button">Lempar dadu</button>
+        </div>
+        <p class="msg" id="msg" aria-live="polite"></p>
+      </section>
+
+      <section>
+        <h2 class="label">Pemain</h2>
+        <ul class="plain players" id="players"></ul>
+      </section>
+
+      <section>
+        <h2 class="label">Riwayat</h2>
+        <ul class="plain log" id="log"></ul>
+      </section>
+
+      <section class="settings">
+        <h2 class="label" style="margin:0">Permainan baru</h2>
+        <div class="seg" id="countSeg" role="group" aria-label="Jumlah pemain"></div>
+        <div id="types"></div>
+        <button class="btn ghost" id="newBtn" type="button">Mulai permainan baru</button>
+        <p class="rules">Angka 6 memberi giliran tambahan. Untuk menang, dadu harus pas ke kotak 100; kalau lebih, bidak tetap di tempat.</p>
+      </section>
+    </aside>
+  </div>
+</div>
+
+<script>
+(function () {
+  var SNAKES = { 16: 6, 47: 26, 49: 11, 56: 53, 62: 19, 87: 24, 93: 73, 95: 75, 98: 78 };
+  var LADDERS = { 4: 14, 9: 31, 21: 42, 28: 84, 36: 44, 51: 67, 71: 91, 80: 100 };
+  var COLORS = [['#E4572E', '#FFFFFF'], ['#2E86DE', '#FFFFFF'], ['#F2B134', '#1B1B1B'], ['#2FA66A', '#FFFFFF']];
+  var FACES = { 1: [4], 2: [0, 8], 3: [0, 4, 8], 4: [0, 2, 6, 8], 5: [0, 2, 4, 6, 8], 6: [0, 2, 3, 5, 6, 8] };
+  var NS = 'http://www.w3.org/2000/svg';
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function $(s) { return document.querySelector(s); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function cell(n) {
+    var r = Math.floor((n - 1) / 10);
+    var c = r % 2 === 0 ? (n - 1) % 10 : 9 - ((n - 1) % 10);
+    return { r: r, c: c, x: c * 10 + 5, y: (9 - r) * 10 + 5 };
+  }
+  function svgEl(name, attrs, style) {
+    var el = document.createElementNS(NS, name);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    if (style) el.setAttribute('style', style);
+    return el;
+  }
+
+  var cfg = { count: 2, cpu: [false, true, true, true] };
+  var G = null, gen = 0, pawnEls = [];
+
+  /* ---------- papan ---------- */
+  function buildBoard() {
+    var board = $('#board');
+    board.innerHTML = '';
+    for (var vr = 0; vr < 10; vr++) {
+      var r = 9 - vr;
+      for (var vc = 0; vc < 10; vc++) {
+        var n = r * 10 + (r % 2 === 0 ? vc + 1 : 10 - vc);
+        var d = document.createElement('div');
+        d.className = 'cell' + ((r + vc) % 2 ? ' alt' : '') + (n === 1 ? ' start' : '') + (n === 100 ? ' finish' : '');
+        var s = document.createElement('span');
+        s.textContent = n;
+        d.appendChild(s);
+        board.appendChild(d);
+      }
+    }
+    var svg = svgEl('svg', { 'class': 'overlay', viewBox: '0 0 100 100', preserveAspectRatio: 'none', 'aria-hidden': 'true' });
+    var from;
+    for (from in LADDERS) svg.appendChild(drawLadder(cell(+from), cell(LADDERS[from])));
+    var i = 0;
+    for (from in SNAKES) svg.appendChild(drawSnake(cell(+from), cell(SNAKES[from]), i++));
+    board.appendChild(svg);
+    var layer = document.createElement('div');
+    layer.className = 'pawns';
+    layer.id = 'pawnLayer';
+    board.appendChild(layer);
+  }
+
+  function drawLadder(a, b) {
+    var g = svgEl('g', {});
+    var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    var ux = dx / len, uy = dy / len, px = -uy, py = ux;
+    var x1 = a.x + ux * 2.5, y1 = a.y + uy * 2.5, x2 = b.x - ux * 2.5, y2 = b.y - uy * 2.5;
+    var off = 1.6, st = 'stroke:var(--ladder);stroke-linecap:round;';
+    g.appendChild(svgEl('line', { x1: x1 + px * off, y1: y1 + py * off, x2: x2 + px * off, y2: y2 + py * off, 'stroke-width': 1.1 }, st));
+    g.appendChild(svgEl('line', { x1: x1 - px * off, y1: y1 - py * off, x2: x2 - px * off, y2: y2 - py * off, 'stroke-width': 1.1 }, st));
+    var span = Math.hypot(x2 - x1, y2 - y1);
+    var rungs = Math.max(2, Math.floor(span / 4.2));
+    for (var k = 0; k <= rungs; k++) {
+      var t = k / rungs, cx = x1 + (x2 - x1) * t, cy = y1 + (y2 - y1) * t;
+      g.appendChild(svgEl('line', { x1: cx + px * off, y1: cy + py * off, x2: cx - px * off, y2: cy - py * off, 'stroke-width': 0.8 }, st));
+    }
+    return g;
+  }
+
+  function drawSnake(a, b, i) {
+    var g = svgEl('g', {});
+    var dx = b.x - a.x, dy = b.y - a.y, len = Math.hypot(dx, dy);
+    var nx = -dy / len, ny = dx / len;
+    var amp = Math.min(9, len * 0.18) * (i % 2 ? 1 : -1) * 1.6;
+    var c1x = a.x + dx * 0.25 + nx * amp, c1y = a.y + dy * 0.25 + ny * amp;
+    var c2x = a.x + dx * 0.75 - nx * amp, c2y = a.y + dy * 0.75 - ny * amp;
+    var d = 'M' + a.x + ' ' + a.y + ' C' + c1x + ' ' + c1y + ' ' + c2x + ' ' + c2y + ' ' + b.x + ' ' + b.y;
+    var col = 'var(--sn' + (i % 3 + 1) + ')';
+    g.appendChild(svgEl('path', { d: d, fill: 'none', 'stroke-width': 2.7 }, 'stroke:' + col + ';stroke-linecap:round;'));
+    g.appendChild(svgEl('path', { d: d, fill: 'none', 'stroke-width': 0.9 }, 'stroke:var(--sn-dash);stroke-linecap:round;stroke-dasharray:1.1 2.1;'));
+    g.appendChild(svgEl('circle', { cx: b.x, cy: b.y, r: 1.1 }, 'fill:' + col + ';'));
+    var tx = c1x - a.x, ty = c1y - a.y, tl = Math.hypot(tx, ty);
+    tx /= tl; ty /= tl;
+    var hx = -ty, hy = tx;
+    g.appendChild(svgEl('line', { x1: a.x + tx * 2.4, y1: a.y + ty * 2.4, x2: a.x + tx * 4.2, y2: a.y + ty * 4.2, 'stroke-width': 0.5 }, 'stroke:#E0243A;stroke-linecap:round;'));
+    g.appendChild(svgEl('circle', { cx: a.x, cy: a.y, r: 2.5 }, 'fill:' + col + ';'));
+    [-1, 1].forEach(function (sgn) {
+      var ex = a.x + tx * 0.9 + hx * 1.1 * sgn, ey = a.y + ty * 0.9 + hy * 1.1 * sgn;
+      g.appendChild(svgEl('circle', { cx: ex, cy: ey, r: 0.8 }, 'fill:#FFFFFF;'));
+      g.appendChild(svgEl('circle', { cx: ex + tx * 0.2, cy: ey + ty * 0.2, r: 0.38 }, 'fill:#14302A;'));
+    });
+    return g;
+  }
+
+  /* ---------- bidak ---------- */
+  function buildPawns() {
+    var layer = $('#pawnLayer');
+    layer.innerHTML = '';
+    pawnEls = G.players.map(function (p) {
+      var el = document.createElement('div');
+      el.className = 'pawn';
+      el.style.setProperty('--pc', COLORS[p.i][0]);
+      el.style.setProperty('--pt', COLORS[p.i][1]);
+      el.textContent = p.i + 1;
+      layer.appendChild(el);
+      return el;
+    });
+    G.players.forEach(function (p) { placePawn(p, false); });
+  }
+  function placePawn(p, jump) {
+    var el = pawnEls[p.i];
+    el.classList.toggle('jump', !!jump);
+    if (p.pos === 0) {
+      el.style.left = (0.4 + p.i * 5) + '%';
+      el.style.top = 'calc(100% + 14px)';
+    } else {
+      var c = cell(p.pos);
+      el.style.left = (c.c * 10 + 0.4 + (p.i % 2) * 4.8) + '%';
+      el.style.top = ((9 - c.r) * 10 + 0.4 + Math.floor(p.i / 2) * 4.8) + '%';
+    }
+  }
+
+  /* ---------- dadu ---------- */
+  function buildDie() {
+    var die = $('#die');
+    for (var k = 0; k < 9; k++) die.appendChild(document.createElement('i'));
+    setDie(3);
+  }
+  function setDie(v) {
+    var dots = $('#die').children, on = FACES[v];
+    for (var k = 0; k < 9; k++) dots[k].style.visibility = on.indexOf(k) > -1 ? 'visible' : 'hidden';
+    $('#die').setAttribute('aria-label', 'Dadu menunjukkan ' + v);
+  }
+  function rollDie() {
+    return new Promise(function (res) {
+      var final = 1 + Math.floor(Math.random() * 6);
+      var die = $('#die');
+      die.classList.add('rolling');
+      var t = setInterval(function () { setDie(1 + Math.floor(Math.random() * 6)); }, 80);
+      setTimeout(function () {
+        clearInterval(t);
+        die.classList.remove('rolling');
+        setDie(final);
+        res(final);
+      }, reduced ? 150 : 700);
+    });
+  }
+
+  /* ---------- tampilan ---------- */
+  function setChip(el, i) {
+    el.style.setProperty('--pc', COLORS[i][0]);
+    el.style.setProperty('--pt', COLORS[i][1]);
+    el.textContent = i + 1;
+  }
+  function addLog(text) {
+    G.log.unshift(text);
+    if (G.log.length > 7) G.log.pop();
+    renderLog();
+  }
+  function renderLog() {
+    var ul = $('#log');
+    ul.innerHTML = '';
+    G.log.forEach(function (t) {
+      var li = document.createElement('li');
+      li.textContent = t;
+      ul.appendChild(li);
+    });
+  }
+  function renderPlayers() {
+    var ul = $('#players');
+    ul.innerHTML = '';
+    G.players.forEach(function (p) {
+      var li = document.createElement('li');
+      if (!G.over && p.i === G.turn) li.className = 'on';
+      var chip = document.createElement('div');
+      chip.className = 'chip';
+      setChip(chip, p.i);
+      var nm = document.createElement('div');
+      nm.className = 'nm';
+      nm.textContent = p.name;
+      var ps = document.createElement('div');
+      ps.className = 'ps';
+      ps.textContent = p.pos === 0 ? 'di garis mulai' : 'kotak ' + p.pos;
+      li.appendChild(chip); li.appendChild(nm); li.appendChild(ps);
+      ul.appendChild(li);
+    });
+    pawnEls.forEach(function (el, i) { el.classList.toggle('active', !G.over && i === G.turn); });
+  }
+  function renderStatus() {
+    var p = G.players[G.turn], card = $('#turnCard'), btn = $('#rollBtn');
+    if (G.over) {
+      var w = G.winner;
+      card.classList.add('win');
+      setChip($('#turnChip'), w.i);
+      $('#turnTitle').textContent = w.name + ' menang!';
+      $('#msg').textContent = 'Sampai di kotak 100. Mau main lagi?';
+      btn.textContent = 'Main lagi';
+      btn.disabled = false;
+      return;
+    }
+    card.classList.remove('win');
+    setChip($('#turnChip'), p.i);
+    $('#turnTitle').textContent = 'Giliran ' + p.name;
+    btn.textContent = p.cpu ? 'Komputer bermain...' : 'Lempar dadu';
+    btn.disabled = G.busy || p.cpu;
+    $('#msg').textContent = G.busy ? '' : (p.cpu ? 'Komputer akan melempar dadu sebentar lagi.' : 'Tekan tombol untuk melempar dadu.');
+  }
+  function renderAll() { renderPlayers(); renderStatus(); }
+
+  /* ---------- jalannya permainan ---------- */
+  function newGame() {
+    gen++;
+    G = {
+      players: [],
+      turn: 0, busy: false, over: false, winner: null, log: []
+    };
+    for (var i = 0; i < cfg.count; i++) {
+      G.players.push({ i: i, pos: 0, cpu: cfg.cpu[i], name: (cfg.cpu[i] ? 'Komputer ' : 'Pemain ') + (i + 1) });
+    }
+    buildPawns();
+    renderAll();
+    addLog('Permainan dimulai. Pemain 1 jalan lebih dulu.');
+    maybeAuto();
+  }
+  function maybeAuto() {
+    var my = gen;
+    if (!G || G.over) return;
+    if (G.players[G.turn].cpu) {
+      setTimeout(function () { if (my === gen) roll(); }, reduced ? 300 : 900);
+    }
+  }
+  async function roll() {
+    if (!G || G.busy) return;
+    if (G.over) { newGame(); return; }
+    var my = gen;
+    G.busy = true;
+    renderStatus();
+    var v = await rollDie();
+    if (my !== gen) return;
+    var p = G.players[G.turn];
+    addLog(p.name + ' melempar ' + v + '.');
+    if (p.pos + v > 100) {
+      addLog(p.name + ' butuh angka pas ke 100, bidak tetap di kotak ' + p.pos + '.');
+    } else {
+      for (var s = 0; s < v; s++) {
+        p.pos++;
+        placePawn(p, false);
+        renderPlayers();
+        await sleep(reduced ? 60 : 230);
+        if (my !== gen) return;
+      }
+      var to = SNAKES[p.pos] !== undefined ? SNAKES[p.pos] : LADDERS[p.pos];
+      if (to !== undefined) {
+        var from = p.pos, isSnake = SNAKES[from] !== undefined;
+        await sleep(reduced ? 50 : 250);
+        if (my !== gen) return;
+        addLog(isSnake ? p.name + ' dimakan ular di kotak ' + from + ', turun ke ' + to + '.' : p.name + ' naik tangga dari kotak ' + from + ' ke ' + to + '.');
+        p.pos = to;
+        placePawn(p, true);
+        renderPlayers();
+        await sleep(reduced ? 100 : 950);
+        if (my !== gen) return;
+      }
+      if (p.pos === 100) {
+        G.over = true;
+        G.winner = p;
+        G.busy = false;
+        addLog(p.name + ' sampai di kotak 100 dan menang!');
+        renderAll();
+        return;
+      }
+    }
+    if (v === 6) {
+      addLog('Angka 6, ' + p.name + ' lempar lagi.');
+    } else {
+      G.turn = (G.turn + 1) % G.players.length;
+    }
+    G.busy = false;
+    renderAll();
+    maybeAuto();
+  }
+
+  /* ---------- pengaturan ---------- */
+  function renderSettings() {
+    var seg = $('#countSeg');
+    seg.innerHTML = '';
+    [2, 3, 4].forEach(function (n) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = n + ' pemain';
+      b.setAttribute('aria-pressed', cfg.count === n ? 'true' : 'false');
+      b.addEventListener('click', function () { cfg.count = n; renderSettings(); });
+      seg.appendChild(b);
+    });
+    var box = $('#types');
+    box.innerHTML = '';
+    for (var i = 0; i < cfg.count; i++) {
+      (function (i) {
+        var row = document.createElement('div');
+        row.className = 'set-row';
+        var l = document.createElement('div');
+        l.style.cssText = 'display:flex;align-items:center;gap:10px';
+        var chip = document.createElement('div');
+        chip.className = 'chip';
+        setChip(chip, i);
+        var t = document.createElement('span');
+        t.textContent = 'Pemain ' + (i + 1);
+        l.appendChild(chip); l.appendChild(t);
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'toggle';
+        b.id = 'type' + i;
+        b.textContent = cfg.cpu[i] ? 'Komputer' : 'Manusia';
+        b.addEventListener('click', function () {
+          cfg.cpu[i] = !cfg.cpu[i];
+          b.textContent = cfg.cpu[i] ? 'Komputer' : 'Manusia';
+        });
+        row.appendChild(l); row.appendChild(b);
+        box.appendChild(row);
+      })(i);
+    }
+  }
+
+  buildBoard();
+  buildDie();
+  renderSettings();
+  $('#rollBtn').addEventListener('click', roll);
+  $('#newBtn').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+
+</body></html>
